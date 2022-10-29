@@ -103,6 +103,7 @@ const BeeCompound = async () => {
   // storage array for sending reports
   let report = ["Bee Report " + todayDate()];
   report.push("Compound Target: 200 BUSD");
+  let balances = [];
 
   // store last compound, schedule next
   let previousRestake = new Date();
@@ -140,6 +141,7 @@ const BeeCompound = async () => {
         // store the timestamp to plan for restake
         const timestamp = u["_lastCompoundTimestamp"];
         previousRestake = new Date(timestamp * 1000);
+        balances.push(parseFloat(balance));
         report.push(success);
       }
     } catch (error) {
@@ -158,6 +160,10 @@ const BeeCompound = async () => {
       report.push(fail);
     }
   }
+
+  // calculate the average wallet size
+  const average = eval(balances.join("+")) / balances.length;
+  report.push({ average: average });
 
   // schedule next, send report
   scheduleNext(previousRestake);
