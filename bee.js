@@ -102,7 +102,6 @@ const BeeCompound = async () => {
 
   // storage array for sending reports
   let report = ["Bee Report " + todayDate()];
-  report.push("Compound Target: 200 BUSD");
   let balances = [];
 
   // store last compound, schedule next
@@ -163,7 +162,7 @@ const BeeCompound = async () => {
 
   // calculate the average wallet size
   const average = eval(balances.join("+")) / balances.length;
-  report.push({ average: average });
+  report.push({ average: average, target: 200 });
 
   // schedule next, send report
   scheduleNext(previousRestake);
@@ -173,8 +172,8 @@ const BeeCompound = async () => {
 
 // Job Scheduler Function
 const scheduleNext = async (nextDate) => {
-  // set next job to be 24hrs from now
-  nextDate.setHours(nextDate.getHours() + 12);
+  // set next job to be 6 hrs from now
+  nextDate.setHours(nextDate.getHours() + 6);
   restakes.nextRestake = nextDate.toString();
   console.log("Next Restake: ", nextDate);
 
