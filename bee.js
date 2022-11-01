@@ -127,7 +127,7 @@ const BeeCompound = async () => {
         const balance = ethers.utils.formatEther(u["_compoundedDeposit"]);
         console.log(`Wallet${wallet["index"]}: success`);
         console.log(`Vault Balance: ${balance} BUSD`);
-        const compounds = u["_compounds"];
+        const compounds = u["_compounds"].toString();
 
         const success = {
           index: wallet.index,
