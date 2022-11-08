@@ -1,6 +1,6 @@
 /*
-- Bee Compound - 
-This strategy involves triggering the compound function on the BUSD vault contract every X hours in order to continue receiving the maximum payout rewards from the ROI dapp. A notification email report is then sent via email to update the status of the wallets. This compound bot supports multiple wallets and just loops through all of them. Just change the 'initWallets' code to the number you like!  
+- Bee Compound 2 - 
+This strategy involves triggering the compound function on the BUSD vault contract every 12 hours, and claim 48 hrs after 10 compounds are done in order to receive the maximum payout rewards from the ROI dapp. A notification email report is then sent via email to update the status of the wallets. This compound bot supports multiple wallets and just loops through all of them. Just change the 'initWallets' code to the number you like!  
 
 URL: https://busd.bee-n-bee.io/?ref=0xFdD831b51DCdA2be256Edf12Cd81C6Af79b6D7Df
 */
@@ -84,7 +84,7 @@ const connect = async (wallet) => {
   return connection;
 };
 
-// Bee Compound Function
+// BUSD Compound Function
 const BeeCompound = async () => {
   // start function
   console.log("\n");
@@ -100,6 +100,7 @@ const BeeCompound = async () => {
 
   // get wallet detail from .env
   const wallets = initWallets(5);
+  let curr_comp = Infinity;
 
   // storage array for sending reports
   let report = ["Bee Report " + todayDate()];
@@ -128,7 +129,10 @@ const BeeCompound = async () => {
         const balance = ethers.utils.formatEther(u["_compoundedDeposit"]);
         console.log(`Wallet${wallet["index"]}: success`);
         console.log(`Vault Balance: ${balance} BUSD`);
-        const compounds = u["_compounds"].toString();
+
+        // get how many accumulated compounds have been done
+        const compounds = Number(u["_compounds"].toString());
+        curr_comp = Math.min(compounds, curr_comp);
 
         const success = {
           index: wallet.index,
@@ -165,21 +169,119 @@ const BeeCompound = async () => {
   const average = eval(balances.join("+")) / balances.length;
   report.push({ average: average, target: 200 });
 
-  // schedule next, send report
-  scheduleNext(previousRestake);
+  // get required min compounds from contract
+  const minComp = (await minCompounds()) || 10;
+
+  // if the minComp is met
+  if (curr_comp >= minComp) {
+    // withdraw funds after waiting for 48 hrs
+    scheduleNext(WithdrawFunds, previousRestake, 48);
+  } else {
+    // just continue compounding as per normal
+    scheduleNext(BeeCompound, previousRestake, 12);
+  }
+
+  // send status report
+  report.push(restakes);
+  sendReport(report);
+};
+
+// Withdraw Claims Function
+const WithdrawFunds = async () => {
+  // start function
+  console.log("\n");
+  console.log(
+    figlet.textSync("WithdrawFunds", {
+      font: "Standard",
+      horizontalLayout: "default",
+      verticalLayout: "default",
+      width: 80,
+      whitespaceBreak: true,
+    })
+  );
+
+  // get wallet detail from .env
+  const wallets = initWallets(5);
+
+  // storage array for sending reports
+  let report = ["Bee Report " + todayDate()];
+
+  // store last compound, schedule next
+  let previousRestake = new Date();
+  restakes.previousRestake = previousRestake.toString();
+
+  // loop through for each wallet
+  for (const wallet of wallets) {
+    try {
+      // connection using the current wallet
+      const connection = await connect(wallet);
+      const mask =
+        wallet.address.slice(0, 5) + "..." + wallet.address.slice(-6);
+
+      // call the sellHoney function and await the results
+      const result = await connection.contract.sellHoney();
+      const receipt = await result.wait();
+
+      // succeeded
+      if (receipt) {
+        // get the total balance currently locked in the vault
+        const u = await connection.contract.getUserInfo(wallet.address);
+        const balance = ethers.utils.formatEther(u["_compoundedDeposit"]);
+        console.log(`Wallet${wallet["index"]}: success`);
+        console.log(`Vault Balance: ${balance} BUSD`);
+        const compounds = Number(u["_compounds"].toString());
+
+        // get the BUSD balance of the current wallet
+        const busd = await connection.busd.balanceOf(wallet.address);
+
+        const success = {
+          index: wallet.index,
+          wallet: mask,
+          busd: busd,
+          vault: balance,
+          compounds: compounds,
+          withdraw: true,
+        };
+
+        // store the timestamp to plan for restake
+        const timestamp = u["_lastCompoundTimestamp"];
+        previousRestake = new Date(timestamp * 1000);
+        report.push(success);
+      }
+    } catch (error) {
+      console.log(`Wallet${wallet["index"]}: failed!`);
+      console.error(error);
+      const mask =
+        wallet.address.slice(0, 5) + "..." + wallet.address.slice(-6);
+
+      // failed
+      const fail = {
+        index: wallet.index,
+        wallet: mask,
+        withdraw: false,
+      };
+
+      report.push(fail);
+    }
+  }
+
+  // just resume compounding back to normal
+  scheduleNext(BeeCompound, previousRestake, 12);
+
+  // send status report
   report.push(restakes);
   sendReport(report);
 };
 
 // Job Scheduler Function
-const scheduleNext = async (nextDate) => {
-  // set next job to be 6 hrs from now
-  nextDate.setHours(nextDate.getHours() + 6);
+const scheduleNext = async (func, nextDate, x) => {
+  // set next job to be x hrs from now
+  nextDate.setHours(nextDate.getHours() + x);
   restakes.nextRestake = nextDate.toString();
   console.log("Next Restake: ", nextDate);
 
   // schedule next restake
-  scheduler.scheduleJob(nextDate, BeeCompound);
+  scheduler.scheduleJob(nextDate, func);
   storeData();
   return;
 };
@@ -211,6 +313,18 @@ const contractTVL = async () => {
   const formattedBal = ethers.utils.formatEther(balance);
   restakes.previousTVL = formattedBal;
   return { tvl: formattedBal };
+};
+
+// Minimum Claims Function
+const minCompounds = async () => {
+  // just initialize connection
+  const wallets = initWallets(1);
+  const connection = await connect(wallets[0]);
+
+  // get the minimum required compounds for claim
+  const min = await connection.contract.COMPOUNDS_FOR_NO_PENALTY();
+  const result = Number(min.toString());
+  return result;
 };
 
 // Send Report Function
