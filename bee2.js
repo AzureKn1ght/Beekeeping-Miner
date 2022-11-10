@@ -27,6 +27,7 @@ var restakes = {
   previousRestake: "",
   nextRestake: "",
   previousTVL: "",
+  previousAvg: "",
 };
 
 // Main Function
@@ -165,9 +166,11 @@ const BeeCompound = async () => {
     }
   }
 
-  // calculate the average wallet size
+  // calculate the average wallet size and the effective APR
   const average = eval(balances.join("+")) / balances.length;
-  report.push({ average: average, target: 200 });
+  const apr = calculateAPR(restakes.previousAvg, average, 12);
+  report.push({ average: average, dailyAPR: apr });
+  restakes.previousAvg = average;
 
   // get required min compounds from contract
   const minComp = (await minCompounds()) || 10;
@@ -181,9 +184,22 @@ const BeeCompound = async () => {
     scheduleNext(BeeCompound, previousRestake, 12);
   }
 
-  // send status report
-  report.push(restakes);
+  // send status update report
+  report.push({ ...restakes });
   sendReport(report);
+};
+
+// Calculate APR Function
+const calculateAPR = (prevBal, currBal, x) => {
+  if (!prevBal || !currBal) return;
+  prevBal = Number(prevBal);
+  currBal = Number(currBal);
+  x = 24 / x;
+
+  // calculate and return the effective APR
+  let interest = (currBal - prevBal) / prevBal;
+  interest = (interest * 100 * x).toFixed(3);
+  return `${interest}%`;
 };
 
 // Withdraw Claims Function
@@ -204,7 +220,7 @@ const WithdrawFunds = async () => {
   const wallets = initWallets(5);
 
   // storage array for sending reports
-  let report = ["Bee Report " + todayDate()];
+  let report = ["Wtihdraw Report " + todayDate()];
 
   // store last compound, schedule next
   let previousRestake = new Date();
