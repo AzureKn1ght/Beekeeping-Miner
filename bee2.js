@@ -27,7 +27,8 @@ var restakes = {
   previousRestake: "",
   nextRestake: "",
   previousTVL: "",
-  previousAvg: "",
+  previousApr: "",
+  previousAvg: 0,
 };
 
 // Main Function
@@ -104,7 +105,7 @@ const BeeCompound = async () => {
   let curr_comp = Infinity;
 
   // storage array for sending reports
-  let report = ["Bee Report " + todayDate()];
+  let report = ["BUSD Report " + todayDate()];
   let balances = [];
 
   // store last compound, schedule next
@@ -178,6 +179,7 @@ const BeeCompound = async () => {
   if (curr_comp >= minComp) {
     // withdraw funds after waiting for 48 hrs
     scheduleNext(WithdrawFunds, previousRestake, 48);
+    report.push("WITHDRAWING IN 48 HOURS!");
   } else {
     // just continue compounding as per normal
     scheduleNext(BeeCompound, previousRestake, 12);
@@ -186,6 +188,7 @@ const BeeCompound = async () => {
   // send status update report
   report.push({ ...restakes });
   restakes.previousAvg = average;
+  restakes.previousApr = apr;
   sendReport(report);
 };
 
@@ -220,7 +223,7 @@ const WithdrawFunds = async () => {
   const wallets = initWallets(5);
 
   // storage array for sending reports
-  let report = ["Wtihdraw Report " + todayDate()];
+  let report = ["BUSD Withdrawal: " + todayDate()];
 
   // store last compound, schedule next
   let previousRestake = new Date();
