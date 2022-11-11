@@ -170,7 +170,6 @@ const BeeCompound = async () => {
   const average = eval(balances.join("+")) / balances.length;
   const apr = calculateAPR(restakes.previousAvg, average, 12);
   report.push({ average: average, dailyAPR: apr });
-  restakes.previousAvg = average;
 
   // get required min compounds from contract
   const minComp = (await minCompounds()) || 10;
@@ -186,6 +185,7 @@ const BeeCompound = async () => {
 
   // send status update report
   report.push({ ...restakes });
+  restakes.previousAvg = average;
   sendReport(report);
 };
 
