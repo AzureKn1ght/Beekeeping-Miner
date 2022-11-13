@@ -22,7 +22,7 @@ const RPC_URL = process.env.BSC_RPC;
 const BUSD = "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56";
 const ERC20 = [
   "function balanceOf(address) view returns (uint256)",
-  "function transfer(address, uint256) external returns (bool);",
+  "function transfer(address, uint256) external returns (bool)",
 ];
 
 // Storage obj
