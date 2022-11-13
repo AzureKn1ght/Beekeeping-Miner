@@ -292,8 +292,8 @@ const WithdrawFunds = async () => {
   // just resume compounding back to normal
   scheduleNext(BeeCompound, previousRestake, 12);
 
-  // send status report
-  report.push(restakes);
+  // send status update report
+  report.push({ ...restakes });
   sendReport(report);
 };
 
