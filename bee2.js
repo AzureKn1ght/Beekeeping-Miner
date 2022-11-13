@@ -186,6 +186,7 @@ const BeeCompound = async () => {
 
   // if the minComp is met
   if (curr_comp >= minComp) {
+    restakes.withdrawing = true;
     // withdraw funds after waiting for 48 hrs
     scheduleNext(WithdrawFunds, previousRestake, 48);
     report.push("WITHDRAWING IN 48 HOURS!");
@@ -268,6 +269,7 @@ const WithdrawFunds = async () => {
         console.log(`Wallet${wallet["index"]}: success`);
         console.log(`Vault Balance: ${balance} BUSD`);
         const compounds = Number(u["_compounds"].toString());
+        restakes.withdrawing = false;
 
         // get the BUSD balance of the current wallet
         const busd = await connection.busd.balanceOf(wallet.address);
