@@ -20,7 +20,10 @@ const RPC_URL = process.env.BSC_RPC;
 
 // BUSD contract details for ERC-20
 const BUSD = "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56";
-const ERC20 = ["function balanceOf(address) view returns (uint256)"];
+const ERC20 = [
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address, uint256) external returns (bool);",
+];
 
 // Storage obj
 var restakes = {
@@ -78,7 +81,7 @@ const connect = async (wallet) => {
   // Add connection properties
   connection.provider = new ethers.providers.JsonRpcProvider(RPC_URL);
   connection.wallet = new ethers.Wallet(wallet.key, connection.provider);
-  connection.busd = new ethers.Contract(BUSD, ERC20, connection.provider);
+  connection.busd = new ethers.Contract(BUSD, ERC20, connection.wallet);
   connection.contract = new ethers.Contract(VAULT, ABI, connection.wallet);
 
   // connection established
@@ -193,15 +196,15 @@ const BeeCompound = async () => {
 };
 
 // Calculate APR Function
-const calculateAPR = (prevBal, currBal, x) => {
+const calculateAPR = (prevBal, currBal, t) => {
   if (!prevBal || !currBal) return;
   prevBal = Number(prevBal);
   currBal = Number(currBal);
-  x = 24 / x;
+  t = 24 / t;
 
   // calculate and return the effective APR
   let interest = (currBal - prevBal) / prevBal;
-  interest = (interest * 100 * x).toFixed(3);
+  interest = (interest * 100 * t).toFixed(3);
   return `${interest}%`;
 };
 
@@ -252,11 +255,12 @@ const WithdrawFunds = async () => {
 
         // get the BUSD balance of the current wallet
         const busd = await connection.busd.balanceOf(wallet.address);
+        const busd_bal = ethers.utils.formatEther(busd);
 
         const success = {
           index: wallet.index,
           wallet: mask,
-          busd: busd,
+          busd: busd_bal,
           vault: balance,
           compounds: compounds,
           withdraw: true,
@@ -265,6 +269,7 @@ const WithdrawFunds = async () => {
         // store the timestamp to plan for restake
         const timestamp = u["_lastCompoundTimestamp"];
         previousRestake = new Date(timestamp * 1000);
+        transferFunds(connection, busd);
         report.push(success);
       }
     } catch (error) {
@@ -290,6 +295,16 @@ const WithdrawFunds = async () => {
   // send status report
   report.push(restakes);
   sendReport(report);
+};
+
+// Consolidate Funds Function
+const transferFunds = async (con, amt) => {
+  // get main wallet details
+  const wallets = initWallets(5);
+  const mainWallet = wallets[4];
+
+  // transfer funds to the main wallet
+  con.busd.transfer(mainWallet.address, amt);
 };
 
 // Job Scheduler Function
@@ -330,8 +345,9 @@ const contractTVL = async () => {
   const connection = await connect(wallets[0]);
   const balance = await connection.busd.balanceOf(VAULT);
   const formattedBal = ethers.utils.formatEther(balance);
+  const delta = calculateAPR(restakes.previousTVL, formattedBal, 24);
   restakes.previousTVL = formattedBal;
-  return { tvl: formattedBal };
+  return { tvl: formattedBal, change: delta };
 };
 
 // Minimum Claims Function
