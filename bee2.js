@@ -32,6 +32,7 @@ var restakes = {
   previousTVL: "",
   previousApr: "",
   previousAvg: 0,
+  withdrawing: false,
 };
 
 // Main Function
@@ -47,15 +48,20 @@ const main = async () => {
       const nextRestake = new Date(storedData.nextRestake);
       // restore claims schedule
       if (nextRestake > new Date()) {
-        console.log("Restored Restake: " + nextRestake);
-        scheduler.scheduleJob(nextRestake, BeeCompound);
+        // check if withdrawing
+        if (storedData.withdrawing) {
+          scheduler.scheduleJob(nextRestake, WithdrawFunds);
+          console.log("Restored Withdraw: " + nextRestake);
+        } else {
+          scheduler.scheduleJob(nextRestake, BeeCompound);
+          console.log("Restored Restake: " + nextRestake);
+        }
         restakeExists = true;
       }
     }
   } catch (error) {
     console.error(error);
   }
-
   // first time, no previous launch
   if (!restakeExists) BeeCompound();
 };
@@ -239,6 +245,16 @@ const WithdrawFunds = async () => {
       const connection = await connect(wallet);
       const mask =
         wallet.address.slice(0, 5) + "..." + wallet.address.slice(-6);
+
+      // get required min compounds from contract
+      const minComp = (await minCompounds()) || 10;
+
+      // get the total compounds for the current wallet
+      const u = await connection.contract.getUserInfo(wallet.address);
+      const compounds = Number(u["_compounds"].toString());
+
+      // minimum compounds is not met
+      if (compounds < minComp) continue;
 
       // call the sellHoney function and await the results
       const result = await connection.contract.sellHoney();
