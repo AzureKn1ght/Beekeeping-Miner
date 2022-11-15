@@ -172,6 +172,7 @@ const BeeCompound = async () => {
         compound: false,
       };
 
+      curr_comp = 0;
       report.push(fail);
     }
   }
