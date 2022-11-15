@@ -382,7 +382,7 @@ const compoundInterval = async () => {
   const connection = await connect(wallets[0]);
 
   // get the minimum required compounds for claim
-  const interval = await connection.contract.COMPOUNDS_INTERVAL();
+  const interval = await connection.contract.COMPOUND_INTERVAL();
   const result = Number(interval.toString());
   return result;
 };
