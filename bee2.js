@@ -184,16 +184,19 @@ const BeeCompound = async () => {
 
   // get required min compounds from contract
   const minComp = (await minCompounds()) || 10;
+  const buildUp = (await rewardsWindow()) || 172800;
+  const interval = (await compoundInterval()) || 43200;
 
   // if the minComp is met
   if (curr_comp >= minComp) {
     restakes.withdrawing = true;
     // withdraw funds after waiting for 48 hrs
-    scheduleNext(WithdrawFunds, previousRestake, 48);
-    report.push("WITHDRAWING IN 48 HOURS!");
+    scheduleNext(WithdrawFunds, previousRestake, buildUp);
+    report.push("WITHDRAWING IN " + buildUp / 3600);
   } else {
     // just continue compounding as per normal
-    scheduleNext(BeeCompound, previousRestake, 12);
+    scheduleNext(BeeCompound, previousRestake, interval);
+    report.push("COMPOUNDING IN " + interval / 3600);
   }
 
   // send status update report
@@ -256,7 +259,7 @@ const WithdrawFunds = async () => {
       const compounds = Number(u["_compounds"].toString());
 
       // minimum compounds is not met
-      if (compounds < minComp) continue;
+      if (compounds < minComp) throw new Error("minComp");
 
       // call the sellHoney function and await the results
       const result = await connection.contract.sellHoney();
@@ -288,7 +291,6 @@ const WithdrawFunds = async () => {
         // store the timestamp to plan for restake
         const timestamp = u["_lastCompoundTimestamp"];
         previousRestake = new Date(timestamp * 1000);
-        transferFunds(connection, busd);
         report.push(success);
       }
     } catch (error) {
@@ -309,29 +311,21 @@ const WithdrawFunds = async () => {
   }
 
   // just resume compounding back to normal
-  scheduleNext(BeeCompound, previousRestake, 12);
+  const interval = (await compoundInterval()) || 43200;
+  scheduleNext(BeeCompound, previousRestake, interval);
 
   // send status update report
   report.push({ ...restakes });
   sendReport(report);
 };
 
-// Consolidate Funds Function
-const transferFunds = async (con, amt) => {
-  // get main wallet details
-  const wallets = initWallets(5);
-  const mainWallet = wallets[4];
-
-  // transfer funds to the main wallet
-  con.busd.transfer(mainWallet.address, amt);
-};
-
 // Job Scheduler Function
-const scheduleNext = async (func, nextDate, x) => {
-  // set next job to be x hrs from now
-  nextDate.setHours(nextDate.getHours() + x);
+const scheduleNext = async (func, nextDate, t) => {
+  t = t / 3600;
+  // set next job to execute with delay time
+  nextDate.setHours(nextDate.getHours() + t);
   restakes.nextRestake = nextDate.toString();
-  console.log("Next Restake: ", nextDate);
+  console.log("Next: ", nextDate);
 
   // schedule next restake
   scheduler.scheduleJob(nextDate, func);
@@ -381,6 +375,29 @@ const minCompounds = async () => {
   return result;
 };
 
+// Minimum Claims Function
+const compoundInterval = async () => {
+  // just initialize connection
+  const wallets = initWallets(1);
+  const connection = await connect(wallets[0]);
+
+  // get the minimum required compounds for claim
+  const interval = await connection.contract.COMPOUNDS_INTERVAL();
+  const result = Number(interval.toString());
+  return result;
+};
+
+const rewardsWindow = async () => {
+  // just initialize connection
+  const wallets = initWallets(1);
+  const connection = await connect(wallets[0]);
+
+  // get the minimum required compounds for claim
+  const interval = await connection.contract.CUTOFF_TIMEOUT();
+  const result = Number(interval.toString());
+  return result;
+};
+
 // Send Report Function
 const sendReport = async (report) => {
   // get the formatted date
@@ -404,7 +421,7 @@ const sendReport = async (report) => {
   const mailOptions = {
     from: process.env.EMAIL_ADDR,
     to: process.env.RECIPIENT,
-    subject: "Bee Report: " + today,
+    subject: "BUSD Report: " + today,
     text: JSON.stringify(report, null, 2),
   };
 
